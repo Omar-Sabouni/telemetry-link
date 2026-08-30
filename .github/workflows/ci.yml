@@ -1,0 +1,131 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.compiler }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: GCC
+            cc: gcc
+            cxx: g++
+          - compiler: Clang
+            cc: clang
+            cxx: clang++
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: >-
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DTELEMETRY_LINK_BUILD_CLI=ON
+          -DTELEMETRY_LINK_BUILD_BENCHMARK=ON
+          -DTELEMETRY_LINK_BUILD_TESTS=ON
+          -DTELEMETRY_LINK_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build build --parallel 2
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  windows:
+    name: MSVC
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >-
+          cmake -S . -B build-windows
+          -DTELEMETRY_LINK_BUILD_CLI=ON
+          -DTELEMETRY_LINK_BUILD_BENCHMARK=OFF
+          -DTELEMETRY_LINK_BUILD_TESTS=ON
+          -DTELEMETRY_LINK_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build build-windows --config Release --parallel 2
+
+      - name: Test
+        run: ctest --test-dir build-windows -C Release --output-on-failure
+
+  install-consumer:
+    name: Installed package consumer
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure library-only build
+        run: >-
+          cmake -S . -B build-package
+          -DCMAKE_BUILD_TYPE=Release
+          -DTELEMETRY_LINK_BUILD_CLI=OFF
+          -DTELEMETRY_LINK_BUILD_BENCHMARK=OFF
+          -DTELEMETRY_LINK_BUILD_TESTS=OFF
+
+      - name: Build and install
+        run: |
+          cmake --build build-package --parallel 2
+          cmake --install build-package --prefix "${{ github.workspace }}/stage"
+
+      - name: Configure installed-package consumer
+        run: >-
+          cmake -S tests/consumer -B build-consumer
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_PREFIX_PATH="${{ github.workspace }}/stage"
+
+      - name: Build and test consumer
+        run: |
+          cmake --build build-consumer --parallel 2
+          ctest --test-dir build-consumer --output-on-failure
+
+      - name: Test add_subdirectory consumer
+        run: |
+          cmake -S tests/subproject -B build-subproject -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-subproject --parallel 2
+          ctest --test-dir build-subproject --output-on-failure
+
+  sanitizers:
+    name: Address and undefined behavior sanitizers
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        env:
+          CC: clang
+          CXX: clang++
+        run: >-
+          cmake -S . -B build-sanitize
+          -DCMAKE_BUILD_TYPE=Debug
+          -DTELEMETRY_LINK_BUILD_CLI=ON
+          -DTELEMETRY_LINK_BUILD_BENCHMARK=OFF
+          -DTELEMETRY_LINK_BUILD_TESTS=ON
+          "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer"
+          "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined"
+
+      - name: Build
+        run: cmake --build build-sanitize --parallel 2
+
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: ctest --test-dir build-sanitize --output-on-failure

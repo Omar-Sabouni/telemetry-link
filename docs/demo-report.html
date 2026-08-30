@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#ffffff">
+  <title>TelemetryLink stream report</title>
+  <style>
+    /* Laid out like a component datasheet: a part-number rule at the top,
+       numbered sections, and a trace strip of every record in the stream. */
+    :root {
+      color-scheme: light;
+      --sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --ink: #111111;
+      --muted: #555555;
+      --rule: #111111;
+      --rule-soft: #d4d4d4;
+      --shade: #ececec;
+      --surface: #ffffff;
+      --ok: #1f7a3a;
+      --warn: #b86e00;
+      --warn-bg: #fff3dc;
+      --danger: #c21f2c;
+      --danger-bg: #fde7e8;
+      --focus: #0057b8;
+    }
+    * { box-sizing: border-box; }
+    html { min-width: 320px; background: #e6e6e6; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      padding: 32px 16px;
+      background: #e6e6e6;
+      color: var(--ink);
+      font: 14px/1.45 var(--sans);
+    }
+    .skip-link {
+      position: fixed; z-index: 20; top: 6px; left: 6px; padding: 7px 9px;
+      color: var(--surface); background: var(--ink);
+      transform: translateY(-150%);
+    }
+    .skip-link:focus { transform: translateY(0); }
+    .sheet {
+      width: min(1180px, 100%);
+      margin: 0 auto;
+      padding: 36px 44px 48px;
+      background: var(--surface);
+      box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
+    }
+    .reader-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 8px 24px;
+      padding-bottom: 8px;
+      border-bottom: 3px solid var(--rule);
+    }
+    .reader-title h1 { margin: 0; font: 700 30px/1 var(--sans); letter-spacing: -0.01em; }
+    .reader-title span { display: block; margin-top: 6px; color: var(--muted); font-size: 14px; }
+    .health-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0; font-size: 14px; }
+    .health-line strong { text-transform: capitalize; }
+    .health-line--ok strong { color: var(--ok); }
+    .health-line--degraded strong { color: var(--danger); }
+    .health-line > span:last-child { color: var(--muted); }
+    .health-line .state-mark { display: none; }
+    .state-mark::before {
+      content: "";
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .reader:focus { outline: none; }
+    h2, h3, p { margin-top: 0; }
+    h2 { margin: 32px 0 4px; font: 700 18px/1.2 var(--sans); }
+    h2 .section-number { display: inline-block; min-width: 1.8em; }
+    .section-note { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+    code, pre, .number, .line-number { font-family: var(--mono); }
+
+    /* Figure 1: one block per record, in output order */
+    .stream-strip { margin: 22px 0 0; }
+    .stream-strip ol {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      margin: 0;
+      padding: 10px 0;
+      border-block: 1px solid var(--rule-soft);
+      list-style: none;
+    }
+    .stream-strip li {
+      width: 22px;
+      height: 30px;
+      border: 1px solid var(--ink);
+      background: var(--surface);
+    }
+    .stream-strip li[data-state="gap"] { border-color: var(--warn); background: repeating-linear-gradient(135deg, var(--warn) 0 2px, var(--warn-bg) 2px 6px); }
+    .stream-strip li[data-state="out_of_order"] { border-color: var(--danger); background: var(--danger-bg); }
+    .stream-strip li[data-state="first"] { background: var(--ink); }
+    .stream-strip li.strip-health { width: 30px; margin-left: 10px; border-width: 2px; }
+    .stream-strip li.strip-health[data-state="degraded"] { border-color: var(--danger); background: var(--danger); }
+    .stream-strip li.strip-health[data-state="ok"] { border-color: var(--ok); background: var(--ok); }
+    .stream-strip figcaption { margin-top: 6px; color: var(--muted); font-size: 13px; }
+    .fig-label { color: var(--ink); font-weight: 700; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+    }
+    .table-scroll { overflow: auto; overscroll-behavior-inline: contain; }
+    .table-scroll:focus, .counter-scroll:focus, pre:focus {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    caption {
+      padding-bottom: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: left;
+    }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    th, td { padding: 6px 10px 6px 0; border-bottom: 1px solid var(--rule-soft); text-align: left; vertical-align: top; }
+    thead th {
+      padding-top: 7px;
+      border-top: 2px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+      background: var(--shade);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    thead th:first-child { padding-left: 8px; }
+    tbody td:first-child { padding-left: 8px; }
+    .records-table { min-width: 640px; table-layout: fixed; }
+    .records-table th:nth-child(1) { width: 90px; }
+    .records-table th:nth-child(2) { width: 130px; }
+    .records-table th:nth-child(3) { width: 170px; }
+    .record-row:last-child > * { border-bottom: 2px solid var(--rule); }
+    .record-row--health > * { border-top: 1px solid var(--rule); }
+    .empty-row td { padding: 15px 10px; color: var(--muted); }
+    .line-number { color: var(--muted); }
+    .number { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .continuity { white-space: nowrap; }
+    .continuity .state-mark { display: inline-block; width: 15px; }
+    .continuity small { margin-left: 6px; color: var(--muted); font-size: 12px; white-space: normal; }
+    [data-state="first"] .state-mark, [data-state="in_order"] .state-mark { visibility: hidden; }
+    [data-state="first"] .continuity, [data-state="in_order"] .continuity { color: var(--muted); }
+    [data-state="ok"] .state-mark { color: var(--ok); }
+    [data-state="gap"] .state-mark { color: var(--warn); }
+    [data-state="out_of_order"] .state-mark, [data-state="degraded"] .state-mark { color: var(--danger); }
+    .payload { overflow-wrap: anywhere; font-family: var(--mono); font-size: 12px; }
+
+    .record-detail summary { cursor: pointer; font-weight: 700; }
+    .record-detail summary span { font-weight: 400; color: var(--muted); }
+    pre {
+      max-height: 200px;
+      margin: 8px 0 0;
+      padding: 10px 12px;
+      overflow: auto;
+      border: 1px solid var(--rule-soft);
+      background: #f7f7f7;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .counter-scroll { overflow: auto; overscroll-behavior-inline: contain; }
+    .counter-table { max-width: 420px; }
+    .counter-table th code { overflow-wrap: anywhere; }
+    .counter-table tbody th { font-weight: 400; }
+    .counter-table .number { width: 80px; text-align: right; }
+    .counter-row--clear .state-mark { color: var(--ok); }
+    .counter-row--alert .state-mark { color: var(--danger); }
+    .counter-table tbody tr:last-child > * { border-bottom: 2px solid var(--rule); }
+    @media (max-width: 900px) {
+      .workspace { grid-template-columns: minmax(0, 1fr); }
+    }
+    @media (max-width: 600px) {
+      body { padding: 0; }
+      .sheet { padding: 20px 14px 32px; box-shadow: none; }
+      .counter-table .number { width: 48px; }
+    }
+    @media print {
+      .skip-link { display: none; }
+      html, body { padding: 0; background: #fff; }
+      body { font-size: 9pt; }
+      .sheet { width: 100%; padding: 0; box-shadow: none; }
+      .workspace { display: block; }
+      .table-scroll, .counter-scroll, pre { max-height: none; overflow: visible; }
+      .records-table { min-width: 0; table-layout: auto; }
+      .counter-table { min-width: 0; }
+      .counters-panel { break-before: page; }
+      thead { display: table-header-group; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#report">Skip to stream</a>
+  <div class="sheet">
+  <header class="reader-header">
+    <div class="reader-title"><h1>TelemetryLink</h1><span>Stream report</span></div>
+    <p class="health-line health-line--degraded" role="status">
+      <span class="state-mark" aria-hidden="true"></span><strong>degraded</strong><span>13 frames, 5 missing frames, 2 CRC failures, 105 noise bytes, 1 other recovery event</span>
+    </p>
+  </header>
+  <main class="reader" id="report" tabindex="-1">
+    <figure class="stream-strip" aria-labelledby="strip-caption">
+      <ol aria-hidden="true"><li data-state="first" title="sequence 0: first"></li><li data-state="in_order" title="sequence 1: in order"></li><li data-state="gap" title="sequence 3: gap"></li><li data-state="gap" title="sequence 5: gap"></li><li data-state="in_order" title="sequence 6: in order"></li><li data-state="in_order" title="sequence 7: in order"></li><li data-state="in_order" title="sequence 8: in order"></li><li data-state="gap" title="sequence 10: gap"></li><li data-state="gap" title="sequence 12: gap"></li><li data-state="in_order" title="sequence 13: in order"></li><li data-state="in_order" title="sequence 14: in order"></li><li data-state="in_order" title="sequence 15: in order"></li><li data-state="gap" title="sequence 17: gap"></li><li class="strip-health" data-state="degraded" title="health: degraded"></li></ol>
+      <figcaption id="strip-caption"><span class="fig-label">Figure 1.</span> One block per record. Hatched: frames missing before it.</figcaption>
+    </figure>
+    <section aria-labelledby="stream-title">
+      <h2 id="stream-title"><span class="section-number">1</span>Decoded stream</h2>
+      <div class="workspace">
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Chronological JSONL record table; horizontally scrollable">
+        <table class="records-table">
+          <caption><span class="fig-label">Table 1.</span> Records in output order, ending with the health record.</caption>
+          <thead><tr><th scope="col">Sequence</th><th scope="col">Record</th><th scope="col">State</th><th scope="col">Decoded value</th></tr></thead>
+          <tbody><tr class="record-row record-row--first" data-state="first">
+              <th scope="row" class="number">0</th>
+              <td><code>heartbeat</code></td>
+              <td class="continuity"><span class="state-mark" aria-hidden="true"></span><span>stream start</span></td>
+              <td class="payload">Uptime 1,000 ms / flags 0x0000</td>
+            </tr>
+<tr class="record-row record-row--in-order" data-state="in_order">
+              <th scope="row" class="number">1</th>
+              <td><code>imu_sample</code></td>
+              <td class="continuity"><span class="state-mark" aria-hidden="true"></span><span>in order</span></td>
+              <td class="payload">Accel [0.2, -0.4, 9.83] m/s² / gyro [0.01, -0.02, 0.03] rad/s</td>
+            </tr>
+<tr class="record-row record-row--gap record-row--focused" data-state="gap" data-focused="true">
+              <th scope="row" class="number">3</th>
+              <td><code>heartbeat</code></td>
+              <td class="continuity"><span class="state-mark" aria-hidden="true"></span><span class="visually-hidden">Focused record. </span><span>gap</span><small>1 missing</small></td>
+              <td class="payload">Uptime 1,750 ms / flags 0x0003</td>
+            </tr>
+<tr class="record-row record-row--gap" data-state="gap">
+              <th scope="row" class="number">5</th>
+              <td><code>motor_status</code></td>
+              <td class="continuity"><span class="state-mark" aria-hidden="true"></span><span>gap</span><small>1 missing</small></td>
+              <td class="payload">Motor 1 / running / 1,325 rpm / 2.12 A / 36.2 °C</td>
+            </tr>
+<tr class="record-row record-row--in-order" data-state="in_order">
+              <th scope="row" class="number">6</th>
+              <td><code>heartbeat</code></td>
+              <td class="continuity"><span class="state-mark" aria-hidden="true"></span><span>in order</span></td>
+              <td class="payload">Uptime 2,500 ms / flags 0x0002</td>
+            </tr>
+<tr class="record-row record-row--in-order" data-state="in_order">
+              <th scope="row" class="number">7</th>
+              <td><code>imu_sample</code></td>
+              <td class="continuity"><span class="state-mark" aria-hidden="true"></span><span>in order</span></td>
+              <td class="payload">Accel [0.8, -1.6, 9.89] m/s² / gyro [0.04, -0.08, 0.12] rad/s</td>
+            </tr>
+<tr class="record-row record-row--in-order" data-state="in_order">
+              <th scope="row" class="number">8</th>
+              <td><code>motor_status</code></td>
+              <td class="continuity"><span class="state-mark" aria-hidden="true"></span><span>in order</span></td>
+              <td class="payload">Motor 0 / fault / 1,400 rpm / 2.5 A / 37 °C</td>
+            </tr>
+<tr class="record-row record-row--gap" data-state="gap">
+              <th scope="row" class="number">10</th>
+              <td><code>imu_sample</code></td>
+              <td class="continuity"><span class="state-mark" aria-hidden="true"></span><span>gap</span><small>1 missing</small></td>
+              <td class="payload">Accel [1.1, -2.2, 9.92] m/s² / gyro [0.055, -0.11, 0.165] rad/s</td>
+            </tr>
+<tr class="record-row record-row--gap" data-state="gap">
+              <th scope="row" class="number">12</th>
+              <td><code>heartbeat</code></td>
+              <td class="continuity"><span class="state-mark" aria-hidden="true"></span><span>gap</span><small>1 missing</small></td>
+              <td class="payload">Uptime 4,000 ms / flags 0x0000</td>
+            </tr>
+<tr class="record-row record-row--in-order" data-state="in_order">
+              <th scope="row" class="number">13</th>
+              <td><code>imu_sample</code></td>
+              <td class="continuity"><span class="state-mark" aria-hidden="true"></span><span>in order</span></td>
+              <td class="payload">Accel [1.4, -2.8, 9.95] m/s² / gyro [0.07, -0.14, 0.21] rad/s</td>
+            </tr>
+<tr class="record-row record-row--in-order" data-state="in_order">
+              <th scope="row" class="number">14</th>
+              <td><code>motor_status</code></td>
+              <td class="continuity"><span class="state-mark" aria-hidden="true"></span><span>in order</span></td>
+              <td class="payload">Motor 2 / running / 1,550 rpm / 3.25 A / 38.5 °C</td>
+            </tr>
+<tr class="record-row record-row--in-order" data-state="in_order">
+              <th scope="row" class="number">15</th>
+              <td><code>heartbeat</code></td>
+              <td class="continuity"><span class="state-mark" aria-hidden="true"></span><span>in order</span></td>
+              <td class="payload">Uptime 4,750 ms / flags 0x0003</td>
+            </tr>
+<tr class="record-row record-row--gap" data-state="gap">
+              <th scope="row" class="number">17</th>
+              <td><code>motor_status</code></td>
+              <td class="continuity"><span class="state-mark" aria-hidden="true"></span><span>gap</span><small>1 missing</small></td>
+              <td class="payload">Motor 1 / fault / 1,625 rpm / 3.62 A / 39.2 °C</td>
+            </tr>
+<tr class="record-row record-row--health record-row--degraded" data-state="degraded">
+          <th scope="row" class="number">EOF</th>
+          <td><code>health</code></td>
+          <td class="continuity"><span class="state-mark" aria-hidden="true"></span><span>degraded</span></td>
+          <td class="payload">13 frames, 5 missing frames, 2 CRC failures, 105 noise bytes, 1 other recovery event</td>
+        </tr></tbody>
+        </table>
+        </div>
+        <details class="record-detail" id="record-detail">
+        <summary>First problem: <span>sequence 3 / heartbeat</span></summary>
+        <pre tabindex="0" role="region" aria-label="Raw JSON for the focused record; scrollable"><code>{&quot;kind&quot;:&quot;message&quot;,&quot;version&quot;:1,&quot;sequence&quot;:3,&quot;sequence_status&quot;:&quot;gap&quot;,&quot;expected_sequence&quot;:2,&quot;missing_before&quot;:1,&quot;type&quot;:&quot;heartbeat&quot;,&quot;payload&quot;:{&quot;uptime_ms&quot;:1750,&quot;status_flags&quot;:3}}</code></pre>
+      </details>
+      </div>
+    </section>
+
+    <section class="counters-panel" aria-labelledby="counters-title">
+      <h2 id="counters-title"><span class="section-number">2</span>Parser and sequence counters</h2>
+      <div class="counter-scroll" tabindex="0" role="region" aria-label="End-of-stream parser recovery and sequence counters; horizontally scrollable">
+        <table class="counter-table">
+          <caption><span class="fig-label">Table 2.</span> Non-zero counters from the health record. They overlap.</caption>
+          <thead><tr><th scope="col">Counter</th><th scope="col">Count</th></tr></thead>
+          <tbody><tr class="counter-row counter-row--alert"><th scope="row"><code>noise_bytes</code></th><td class="number">105</td></tr>
+<tr class="counter-row counter-row--alert"><th scope="row"><code>invalid_lengths</code></th><td class="number">1</td></tr>
+<tr class="counter-row counter-row--alert"><th scope="row"><code>crc_failures</code></th><td class="number">2</td></tr>
+<tr class="counter-row counter-row--alert"><th scope="row"><code>sequence_gaps</code></th><td class="number">5</td></tr>
+<tr class="counter-row counter-row--alert"><th scope="row"><code>missing_frames</code></th><td class="number">5</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  </div>
+</body>
+</html>
+
