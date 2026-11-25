@@ -483,7 +483,8 @@ def _plural(value: int, singular: str, plural: Optional[str] = None) -> str:
 
 def _health_brief(health: Mapping[str, Any]) -> str:
     """Describe the stream using only evidence retained in the health record."""
-    parts = [_plural(health["frames_decoded"], "frame")]
+    decoded = _plural(health["frames_decoded"], "frame")
+    parts = []
     if health["missing_frames"]:
         parts.append(_plural(health["missing_frames"], "missing frame"))
     if health["crc_failures"]:
@@ -505,9 +506,10 @@ def _health_brief(health: Mapping[str, Any]) -> str:
     )
     if other_events:
         parts.append(_plural(other_events, "other recovery event"))
-    if health["status"] == "ok":
-        parts.append("no detected anomalies")
-    return ", ".join(parts)
+    if not parts:
+        return f"Decoded {decoded} with no problems."
+    found = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+    return f"Decoded {decoded}. Found {found}."
 
 
 def _focus_index(messages: Sequence[Mapping[str, Any]]) -> Optional[int]:
@@ -585,8 +587,8 @@ def _message_rows(
     if not messages:
         rows.insert(
             0,
-            '<tr class="empty-row"><td colspan="4"><strong>No decoded messages.</strong> '
-            "No sequence baseline was established.</td></tr>",
+            '<tr class="empty-row"><td colspan="4"><strong>No messages were decoded.</strong>'
+            "</td></tr>",
         )
     return "\n".join(rows)
 
@@ -610,7 +612,7 @@ def _stream_strip(
     )
     return """<figure class="stream-strip" aria-labelledby="strip-caption">
       <ol aria-hidden="true">{}</ol>
-      <figcaption id="strip-caption"><span class="fig-label">Figure 1.</span> One block per record. Hatched: frames missing before it.</figcaption>
+      <figcaption id="strip-caption">Each block is one record. A hatched block means frames were missing before it.</figcaption>
     </figure>""".format("".join(blocks))
 
 
@@ -624,7 +626,7 @@ def _diagnostic_rows(health: Mapping[str, Any], fields: Sequence[str]) -> str:
         if health[field]
     ]
     if not rows:
-        return '<tr class="counter-row counter-row--clear"><td colspan="2">All zero.</td></tr>'
+        return '<tr class="counter-row counter-row--clear"><td colspan="2">Every counter is zero.</td></tr>'
     return "\n".join(rows)
 
 
@@ -641,7 +643,7 @@ def _focus_detail(
         record = health
         line_number = 1
         heading = "EOF / health"
-        reason = "Nothing decoded."
+        reason = "No messages were decoded."
     else:
         record = messages[focus_index]
         line_number = focus_index + 1
@@ -892,11 +894,11 @@ def render_html(
   <main class="reader" id="report" tabindex="-1">
     {stream_strip}
     <section aria-labelledby="stream-title">
-      <h2 id="stream-title"><span class="section-number">1</span>Decoded stream</h2>
+      <h2 id="stream-title">Decoded stream</h2>
       <div class="workspace">
         <div class="table-scroll" tabindex="0" role="region" aria-label="Chronological JSONL record table; horizontally scrollable">
         <table class="records-table">
-          <caption><span class="fig-label">Table 1.</span> Records in output order, ending with the health record.</caption>
+          <caption>The records are in output order, and the health record is last.</caption>
           <thead><tr><th scope="col">Sequence</th><th scope="col">Record</th><th scope="col">State</th><th scope="col">Decoded value</th></tr></thead>
           <tbody>{message_rows}</tbody>
         </table>
@@ -906,10 +908,10 @@ def render_html(
     </section>
 
     <section class="counters-panel" aria-labelledby="counters-title">
-      <h2 id="counters-title"><span class="section-number">2</span>Parser and sequence counters</h2>
+      <h2 id="counters-title">Parser and sequence counters</h2>
       <div class="counter-scroll" tabindex="0" role="region" aria-label="End-of-stream parser recovery and sequence counters; horizontally scrollable">
         <table class="counter-table">
-          <caption><span class="fig-label">Table 2.</span> Non-zero counters from the health record. One frame can count toward more than one counter.</caption>
+          <caption>These are the non-zero counters from the health record. One frame can count toward more than one counter.</caption>
           <thead><tr><th scope="col">Counter</th><th scope="col">Count</th></tr></thead>
           <tbody>{diagnostic_rows}</tbody>
         </table>

@@ -168,9 +168,8 @@ class ReportRendererTest(unittest.TestCase):
         output = REPORT.render_html(messages, summary)
         self.assertEqual(messages, [])
         self.assertIn("<strong>Clean</strong>", output)
-        self.assertIn("0 frames, no detected anomalies", output)
-        self.assertIn("No decoded messages", output)
-        self.assertIn("No sequence baseline", output)
+        self.assertIn("Decoded 0 frames with no problems.", output)
+        self.assertIn("No messages were decoded", output)
         self.assertNotIn("100.0%", output)
 
     def test_sequence_wraparound_is_validated(self) -> None:

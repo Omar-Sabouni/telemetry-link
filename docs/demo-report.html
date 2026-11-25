@@ -215,20 +215,20 @@
   <header class="reader-header">
     <div class="reader-title"><h1>TelemetryLink</h1><span>Stream report</span></div>
     <p class="health-line health-line--degraded" role="status">
-      <span class="state-mark" aria-hidden="true"></span><strong>Degraded</strong><span>13 frames, 5 missing frames, 2 CRC failures, 105 noise bytes, 1 other recovery event</span>
+      <span class="state-mark" aria-hidden="true"></span><strong>Degraded</strong><span>Decoded 13 frames. Found 5 missing frames, 2 CRC failures, 105 noise bytes and 1 other recovery event.</span>
     </p>
   </header>
   <main class="reader" id="report" tabindex="-1">
     <figure class="stream-strip" aria-labelledby="strip-caption">
       <ol aria-hidden="true"><li data-state="first" title="sequence 0: first"></li><li data-state="in_order" title="sequence 1: in order"></li><li data-state="gap" title="sequence 3: gap"></li><li data-state="gap" title="sequence 5: gap"></li><li data-state="in_order" title="sequence 6: in order"></li><li data-state="in_order" title="sequence 7: in order"></li><li data-state="in_order" title="sequence 8: in order"></li><li data-state="gap" title="sequence 10: gap"></li><li data-state="gap" title="sequence 12: gap"></li><li data-state="in_order" title="sequence 13: in order"></li><li data-state="in_order" title="sequence 14: in order"></li><li data-state="in_order" title="sequence 15: in order"></li><li data-state="gap" title="sequence 17: gap"></li><li class="strip-health" data-state="degraded" title="health: degraded"></li></ol>
-      <figcaption id="strip-caption"><span class="fig-label">Figure 1.</span> One block per record. Hatched: frames missing before it.</figcaption>
+      <figcaption id="strip-caption">Each block is one record. A hatched block means frames were missing before it.</figcaption>
     </figure>
     <section aria-labelledby="stream-title">
-      <h2 id="stream-title"><span class="section-number">1</span>Decoded stream</h2>
+      <h2 id="stream-title">Decoded stream</h2>
       <div class="workspace">
         <div class="table-scroll" tabindex="0" role="region" aria-label="Chronological JSONL record table; horizontally scrollable">
         <table class="records-table">
-          <caption><span class="fig-label">Table 1.</span> Records in output order, ending with the health record.</caption>
+          <caption>The records are in output order, and the health record is last.</caption>
           <thead><tr><th scope="col">Sequence</th><th scope="col">Record</th><th scope="col">State</th><th scope="col">Decoded value</th></tr></thead>
           <tbody><tr class="record-row record-row--first" data-state="first">
               <th scope="row" class="number">0</th>
@@ -312,7 +312,7 @@
           <th scope="row" class="number">EOF</th>
           <td><code>health</code></td>
           <td class="continuity"><span class="state-mark" aria-hidden="true"></span><span>degraded</span></td>
-          <td class="payload">13 frames, 5 missing frames, 2 CRC failures, 105 noise bytes, 1 other recovery event</td>
+          <td class="payload">Decoded 13 frames. Found 5 missing frames, 2 CRC failures, 105 noise bytes and 1 other recovery event.</td>
         </tr></tbody>
         </table>
         </div>
@@ -324,10 +324,10 @@
     </section>
 
     <section class="counters-panel" aria-labelledby="counters-title">
-      <h2 id="counters-title"><span class="section-number">2</span>Parser and sequence counters</h2>
+      <h2 id="counters-title">Parser and sequence counters</h2>
       <div class="counter-scroll" tabindex="0" role="region" aria-label="End-of-stream parser recovery and sequence counters; horizontally scrollable">
         <table class="counter-table">
-          <caption><span class="fig-label">Table 2.</span> Non-zero counters from the health record. One frame can count toward more than one counter.</caption>
+          <caption>These are the non-zero counters from the health record. One frame can count toward more than one counter.</caption>
           <thead><tr><th scope="col">Counter</th><th scope="col">Count</th></tr></thead>
           <tbody><tr class="counter-row counter-row--alert"><th scope="row"><code>noise_bytes</code></th><td class="number">105</td></tr>
 <tr class="counter-row counter-row--alert"><th scope="row"><code>invalid_lengths</code></th><td class="number">1</td></tr>
