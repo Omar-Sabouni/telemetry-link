@@ -337,14 +337,12 @@ class TelemetryLinkCliIntegrationTest(unittest.TestCase):
         self.assertEqual(
             diagnostic_result.stderr.replace(b"\r\n", b"\n"),
             b"TelemetryLink diagnostics\n"
-            b"Status    Degraded - damage detected; valid frames recovered\n"
+            b"Status    Degraded. 13 frames recovered from damaged input.\n"
             b"Input     standard input\n"
             b"Bytes     498 received\n"
-            b"Frames    13 decoded\n"
-            b"Frame mix 5 heartbeat / 4 IMU / 4 motor\n"
-            b"Framing   105 noise / 0 invalid version / 0 unknown type / 1 invalid length\n"
-            b"Integrity 2 CRC failure / 0 payload failure / 0 truncated (0 bytes)\n"
-            b"Sequence  5 gaps / 5 missing / 0 out of order\n",
+            b"Frames    13 decoded: 5 heartbeat, 4 IMU, 4 motor status\n"
+            b"Damage    105 noise bytes, 1 invalid length, 2 CRC failures\n"
+            b"Sequence  5 gaps, 5 missing frames\n",
         )
         self.assertNotIn(b"\x1b", diagnostic_result.stderr)
 
@@ -393,7 +391,7 @@ class TelemetryLinkCliIntegrationTest(unittest.TestCase):
         _, health = decode_json_lines(result.stdout)
         self.assertEqual(health["status"], "degraded")
         self.assertIn(b"Status    Degraded", result.stderr)
-        self.assertIn(b"Sequence  5 gaps / 5 missing", result.stderr)
+        self.assertIn(b"Sequence  5 gaps, 5 missing frames", result.stderr)
 
         truncated = simulator_bytes("normal", count=1)[:5]
         truncated_result = run_process(
@@ -402,7 +400,7 @@ class TelemetryLinkCliIntegrationTest(unittest.TestCase):
         self.assertEqual(truncated_result.returncode, 0)
         _, truncated_health = decode_json_lines(truncated_result.stdout)
         self.assertEqual(truncated_health["truncated_frames"], 1)
-        self.assertIn(b"no valid frames recovered", truncated_result.stderr)
+        self.assertIn(b"No valid frames found.", truncated_result.stderr)
 
     def test_simulator_reports_output_errors_without_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

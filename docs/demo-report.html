@@ -215,7 +215,7 @@
   <header class="reader-header">
     <div class="reader-title"><h1>TelemetryLink</h1><span>Stream report</span></div>
     <p class="health-line health-line--degraded" role="status">
-      <span class="state-mark" aria-hidden="true"></span><strong>degraded</strong><span>13 frames, 5 missing frames, 2 CRC failures, 105 noise bytes, 1 other recovery event</span>
+      <span class="state-mark" aria-hidden="true"></span><strong>Degraded</strong><span>13 frames, 5 missing frames, 2 CRC failures, 105 noise bytes, 1 other recovery event</span>
     </p>
   </header>
   <main class="reader" id="report" tabindex="-1">
@@ -327,7 +327,7 @@
       <h2 id="counters-title"><span class="section-number">2</span>Parser and sequence counters</h2>
       <div class="counter-scroll" tabindex="0" role="region" aria-label="End-of-stream parser recovery and sequence counters; horizontally scrollable">
         <table class="counter-table">
-          <caption><span class="fig-label">Table 2.</span> Non-zero counters from the health record. They overlap.</caption>
+          <caption><span class="fig-label">Table 2.</span> Non-zero counters from the health record. One frame can count toward more than one counter.</caption>
           <thead><tr><th scope="col">Counter</th><th scope="col">Count</th></tr></thead>
           <tbody><tr class="counter-row counter-row--alert"><th scope="row"><code>noise_bytes</code></th><td class="number">105</td></tr>
 <tr class="counter-row counter-row--alert"><th scope="row"><code>invalid_lengths</code></th><td class="number">1</td></tr>

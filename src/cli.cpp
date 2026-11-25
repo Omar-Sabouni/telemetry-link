@@ -5,7 +5,10 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
+#include <cerrno>
+#include <cstring>
 #include <fstream>
+#include <initializer_list>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -242,6 +245,28 @@ void write_health(const ParserStats& stats, const TypeCounts& counts) {
               << "}\n";
 }
 
+struct NamedCount {
+    std::uint64_t value;
+    std::string_view singular;
+    std::string_view plural;
+};
+
+[[nodiscard]] std::string join_counts(std::initializer_list<NamedCount> items) {
+    std::string text;
+    for (const auto& item : items) {
+        if (item.value == 0U) {
+            continue;
+        }
+        if (!text.empty()) {
+            text += ", ";
+        }
+        text += std::to_string(item.value);
+        text += ' ';
+        text += item.value == 1U ? item.singular : item.plural;
+    }
+    return text;
+}
+
 void write_diagnostic_label(std::string_view label, bool use_color) {
     write_styled(std::cerr, use_color, ansi::dim, label);
     const auto padding = label.size() < 10U ? 10U - label.size() : 1U;
@@ -274,9 +299,11 @@ void write_diagnostics(
     if (clean) {
         std::cerr << '\n';
     } else if (stats.frames_decoded != 0U) {
-        std::cerr << " - damage detected; valid frames recovered\n";
+        std::cerr << ". " << stats.frames_decoded
+                  << (stats.frames_decoded == 1U ? " frame" : " frames")
+                  << " recovered from damaged input.\n";
     } else {
-        std::cerr << " - damage detected; no valid frames recovered\n";
+        std::cerr << ". No valid frames found.\n";
     }
 
     write_diagnostic_label("Input", use_color);
@@ -284,21 +311,31 @@ void write_diagnostics(
     write_diagnostic_label("Bytes", use_color);
     std::cerr << stats.bytes_received << " received\n";
     write_diagnostic_label("Frames", use_color);
-    std::cerr << stats.frames_decoded << " decoded\n";
-    write_diagnostic_label("Frame mix", use_color);
-    std::cerr << counts.heartbeat << " heartbeat / " << counts.imu_sample
-              << " IMU / " << counts.motor_status << " motor\n";
-    write_diagnostic_label("Framing", use_color);
-    std::cerr << stats.noise_bytes << " noise / " << stats.invalid_versions
-              << " invalid version / " << stats.unknown_types << " unknown type / "
-              << stats.invalid_lengths << " invalid length\n";
-    write_diagnostic_label("Integrity", use_color);
-    std::cerr << stats.crc_failures << " CRC failure / " << stats.payload_failures
-              << " payload failure / " << stats.truncated_frames << " truncated ("
-              << stats.truncated_bytes << " bytes)\n";
+    std::cerr << stats.frames_decoded << " decoded";
+    const auto mix = join_counts({
+        {counts.heartbeat, "heartbeat", "heartbeat"},
+        {counts.imu_sample, "IMU", "IMU"},
+        {counts.motor_status, "motor status", "motor status"},
+    });
+    std::cerr << (mix.empty() ? "" : ": ") << mix << '\n';
+    write_diagnostic_label("Damage", use_color);
+    const auto damage = join_counts({
+        {stats.noise_bytes, "noise byte", "noise bytes"},
+        {stats.invalid_versions, "invalid version", "invalid versions"},
+        {stats.unknown_types, "unknown type", "unknown types"},
+        {stats.invalid_lengths, "invalid length", "invalid lengths"},
+        {stats.crc_failures, "CRC failure", "CRC failures"},
+        {stats.payload_failures, "bad payload", "bad payloads"},
+        {stats.truncated_frames, "truncated frame", "truncated frames"},
+    });
+    std::cerr << (damage.empty() ? "none" : damage) << '\n';
     write_diagnostic_label("Sequence", use_color);
-    std::cerr << stats.sequence_gaps << " gaps / " << stats.missing_frames
-              << " missing / " << stats.out_of_order_frames << " out of order\n";
+    const auto sequence = join_counts({
+        {stats.sequence_gaps, "gap", "gaps"},
+        {stats.missing_frames, "missing frame", "missing frames"},
+        {stats.out_of_order_frames, "out-of-order frame", "out-of-order frames"},
+    });
+    std::cerr << (sequence.empty() ? "in order" : sequence) << '\n';
 }
 
 [[nodiscard]] bool flush_output() {
@@ -316,8 +353,7 @@ void print_usage(std::ostream& output, const char* program) {
     write_visible(output, program);
     output << " [OPTIONS] [--] [FILE|-]\n\n"
            << "Decode TelemetryLink protocol v1 frames from a file or standard input.\n"
-           << "Arbitrary chunks, damaged frames, and sequence gaps are handled as\n"
-           << "stream-parser concerns. FILE defaults to standard input.\n\n"
+           << "FILE defaults to standard input.\n\n"
            << "Streams:\n"
            << "  stdout  One JSON object per decoded frame, then one health object.\n"
            << "  stderr  Errors and the opt-in human diagnostic summary.\n\n"
@@ -431,11 +467,17 @@ int main(int argc, char* argv[]) {
     std::ifstream file;
     std::istream* input = &std::cin;
     if (options.input_path != nullptr && std::string_view{options.input_path} != "-") {
+        errno = 0;
         file.open(options.input_path, std::ios::binary);
         if (!file) {
+            const auto reason = errno;
             std::cerr << "telemetry-link: cannot open '";
             write_visible(std::cerr, options.input_path);
-            std::cerr << "'\n";
+            std::cerr << '\'';
+            if (reason != 0) {
+                std::cerr << ": " << std::strerror(reason);
+            }
+            std::cerr << '\n';
             return 1;
         }
         input = &file;
