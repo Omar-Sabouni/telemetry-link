@@ -886,7 +886,7 @@ def render_html(
   <header class="reader-header">
     <div class="reader-title"><h1>TelemetryLink</h1><span>Stream report</span></div>
     <p class="health-line health-line--{health_status}" role="status">
-      <span class="state-mark" aria-hidden="true"></span><strong>{health_status}</strong><span>{health_brief}</span>
+      <span class="state-mark" aria-hidden="true"></span><strong>{health_label}</strong><span>{health_brief}</span>
     </p>
   </header>
   <main class="reader" id="report" tabindex="-1">
@@ -909,7 +909,7 @@ def render_html(
       <h2 id="counters-title"><span class="section-number">2</span>Parser and sequence counters</h2>
       <div class="counter-scroll" tabindex="0" role="region" aria-label="End-of-stream parser recovery and sequence counters; horizontally scrollable">
         <table class="counter-table">
-          <caption><span class="fig-label">Table 2.</span> Non-zero counters from the health record. They overlap.</caption>
+          <caption><span class="fig-label">Table 2.</span> Non-zero counters from the health record. One frame can count toward more than one counter.</caption>
           <thead><tr><th scope="col">Counter</th><th scope="col">Count</th></tr></thead>
           <tbody>{diagnostic_rows}</tbody>
         </table>
@@ -921,6 +921,7 @@ def render_html(
 </html>
 """.format(
         health_status=_escape(health_status),
+        health_label=_escape({"ok": "Clean", "degraded": "Degraded"}.get(health_status, health_status)),
         health_brief=_escape(_health_brief(health)),
         diagnostic_rows=_diagnostic_rows(health, REPORT_DIAGNOSTIC_FIELDS),
         message_rows=_message_rows(messages, health, focus_index),
