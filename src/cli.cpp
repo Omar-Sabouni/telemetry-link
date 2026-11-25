@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cerrno>
-#include <cstring>
 #include <fstream>
 #include <initializer_list>
 #include <iomanip>
@@ -17,6 +16,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <type_traits>
 
 #ifdef _WIN32
@@ -475,7 +475,7 @@ int main(int argc, char* argv[]) {
             write_visible(std::cerr, options.input_path);
             std::cerr << '\'';
             if (reason != 0) {
-                std::cerr << ": " << std::strerror(reason);
+                std::cerr << ": " << std::generic_category().message(reason);
             }
             std::cerr << '\n';
             return 1;
