@@ -898,7 +898,7 @@ def render_html(
       <div class="workspace">
         <div class="table-scroll" tabindex="0" role="region" aria-label="Chronological JSONL record table; horizontally scrollable">
         <table class="records-table">
-          <caption>The records are in output order, and the health record is last.</caption>
+          <caption class="visually-hidden">Decoded records</caption>
           <thead><tr><th scope="col">Sequence</th><th scope="col">Record</th><th scope="col">State</th><th scope="col">Decoded value</th></tr></thead>
           <tbody>{message_rows}</tbody>
         </table>
@@ -911,7 +911,7 @@ def render_html(
       <h2 id="counters-title">Parser and sequence counters</h2>
       <div class="counter-scroll" tabindex="0" role="region" aria-label="End-of-stream parser recovery and sequence counters; horizontally scrollable">
         <table class="counter-table">
-          <caption>These are the non-zero counters from the health record. One frame can count toward more than one counter.</caption>
+          <caption>One frame can count toward more than one counter.</caption>
           <thead><tr><th scope="col">Counter</th><th scope="col">Count</th></tr></thead>
           <tbody>{diagnostic_rows}</tbody>
         </table>
